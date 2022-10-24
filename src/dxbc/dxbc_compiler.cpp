@@ -60,6 +60,10 @@ namespace dxvk {
       m_oRegs.at(i) = DxbcRegisterPointer { };
     }
     
+    if (m_moduleInfo.options.assumeRefactoringAllowed) {
+      m_precise = false;
+    }
+    
     this->emitInit();
   }
   

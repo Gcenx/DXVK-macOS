@@ -43,6 +43,7 @@ namespace dxvk {
     forceTgsmBarriers        = options.forceTgsmBarriers;
     disableMsaa              = options.disableMsaa;
     dynamicIndexedConstantBufferAsSsbo = options.constantBufferRangeCheck;
+    assumeRefactoringAllowed = options.assumeRefactoringAllowed;
 
     // Disable subgroup early discard on Nvidia because it may hurt performance
     if (adapter->matchesDriver(DxvkGpuVendor::Nvidia, VK_DRIVER_ID_NVIDIA_PROPRIETARY_KHR, 0, 0))
