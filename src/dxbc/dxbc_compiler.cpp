@@ -60,7 +60,7 @@ namespace dxvk {
       m_oRegs.at(i) = DxbcRegisterPointer { };
     }
     
-    if (m_moduleInfo.options.assumeRefactoringAllowed) {
+    if (m_moduleInfo.options.refactoringAllowed) {
       m_precise = false;
     }
     

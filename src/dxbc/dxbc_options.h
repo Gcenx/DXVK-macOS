@@ -55,7 +55,7 @@ namespace dxvk {
     bool invariantPosition = false;
     
     /// Assume global flag RefactoringAllowed on all shaders
-    bool assumeRefactoringAllowed = false;
+    bool refactoringAllowed = false;
 
     /// Insert memory barriers after TGSM stoes
     bool forceTgsmBarriers = false;

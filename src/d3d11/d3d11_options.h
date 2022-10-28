@@ -73,7 +73,7 @@ namespace dxvk {
     /// For shaders without a global RefactoringAllowed flag (mostly
     /// shader model 4.0), emit instructions as if there was one.
     /// Does not affect individual instructions marked as precise.
-    bool assumeRefactoringAllowed;
+    bool refactoringAllowed;
 
     /// Enable float control bits
     bool floatControls;
