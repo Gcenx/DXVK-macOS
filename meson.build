@@ -87,13 +87,6 @@ if platform == 'windows'
 
   dxvk_wsi = 'win32'
   compiler_args += ['-DDXVK_WSI_WIN32']
-else
-  lib_sdl2   = cpp.find_library('SDL2')
-
-  wrc           = find_program('touch')
-  wrc_generator = generator(wrc, output : [ '@BASENAME@_ignored.h' ], arguments : [ '@OUTPUT@' ] )
-
-  dxvk_include_path = include_directories('./include', './include/native', './include/native/windows', './include/native/directx')
 endif
 
 add_project_arguments(cpp.get_supported_arguments(compiler_args), language: 'cpp')
