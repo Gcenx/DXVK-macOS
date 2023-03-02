@@ -760,6 +760,9 @@ namespace dxvk {
     { R"(\\SkyrimSE\.exe$)", {{
       { "dxvk.enableAsync",              "True" },
     }} },
+    { R"(\\(YuanShen|GenshinImpact)\.exe$)",{{
+      { "dxgi.customDeviceDesc",         "AMD Radeon Pro 5300M"}
+    }} }
   }};
 
 
