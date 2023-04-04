@@ -778,6 +778,7 @@ namespace dxvk {
     /* Star Wars Jedi: Fallen Order               */
     { R"(\\SwGame-Win64-Shipping\.exe$)", {{
       { "dxvk.enableAsync",                 "True" },
+      { "d3d11.floatControls",              "False" },
     }} },
   }};
 
