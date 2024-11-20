@@ -1,15 +1,23 @@
-# DXVK
+# DXVK-Sarek:
 
-A Vulkan-based translation layer for Direct3D 9/10/11 which allows running 3D applications on Linux using Wine.
+### Why Does This Repo Exist?
 
-For the current status of the project, please refer to the [project wiki](https://github.com/doitsujin/dxvk/wiki).
+This repository was created to support users with Vulkan capable GPUs that do not meet the 1.3 requirement of the current builds. My goal is to ensure that everyone can benefit from the nice performance of DXVK, even if their hardware is slightly older.
 
-The most recent development builds can be found [here](https://github.com/doitsujin/dxvk/actions/workflows/artifacts.yml?query=branch%3Amaster).
+Additionally, this project is intended to be integrated into [Proton Sarek](https://github.com/pythonlover02/Proton-Sarek). The main idea is to backport Quality of Life (QOL) patches and per game configurations from the latest versions to the 1.10.x branch.
 
-Release builds can be found [here](https://github.com/doitsujin/dxvk/releases).
+Also, a huge thank you to the following contributors for their invaluable help in making this project a reality:
+
+- [Blisto91](https://github.com/Blisto91)
+- [AmerXz](https://github.com/AmerXz)
+- [Gcenx](https://github.com/Gcenx)
+
+Your contributions are greatly appreciated!
+
+All credits to doitsujin/ドイツ人 (Philip Rebohle), you can find the original repository here: [dxvk](https://github.com/doitsujin/dxvk).
 
 ## How to use
-In order to install a DXVK package obtained from the [release](https://github.com/doitsujin/dxvk/releases) page into a given wine prefix, copy or symlink the DLLs into the following directories as follows, then open `winecfg` and manually add DLL overrides for `d3d11`, `d3d10core`, `dxgi`, and `d3d9`:
+In order to install a DXVK package obtained from the [release](https://github.com/pythonlover02/DXVK-Sarek/releases) page into a given wine prefix, copy or symlink the DLLs into the following directories as follows, then open `winecfg` and manually add DLL overrides for `d3d11`, `d3d10core`, `dxgi`, and `d3d9`:
 ```
 WINEPREFIX=/path/to/wineprefix
 cp x64/*.dll $WINEPREFIX/drive_c/windows/system32
@@ -25,10 +33,8 @@ In order to remove DXVK from a prefix, remove the DLLs and DLL overrides, and ru
 
 In order to pull in all submodules that are needed for building, clone the repository using the following command:
 ```
-git clone --recursive https://github.com/doitsujin/dxvk.git
+git clone --recursive https://github.com/pythonlover02/DXVK-Sarek
 ```
-
-
 
 ### Requirements:
 - [wine 7.1](https://www.winehq.org/) or newer
