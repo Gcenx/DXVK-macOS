@@ -500,6 +500,14 @@ namespace dxvk {
       { "d3d9.maxFrameRate",                     "60" },
       { "d3d9.presentInterval",                  "1" },
     }} },
+    /* Dead Space 2
+       Physics issues above 60 FPS
+       Built-in Vsync Locks the game to 30 FPS
+    */
+    { R"(\\deadspace2\.exe$)", {{
+      { "d3d9.maxFrameRate",                     "60" },
+      { "d3d9.presentInterval",                  "1" },
+    }} },
     /* Halo CE/HaloPC                             */
     { R"(\\halo(ce)?\.exe$)", {{
       // Game enables minor decal layering fixes
