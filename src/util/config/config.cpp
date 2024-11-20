@@ -61,9 +61,10 @@ namespace dxvk {
       { "dxgi.nvapiHack",                   "False" },
       { "dxgi.customVendorId",              "1002" },
     }} },
-    /* Far Cry 4: Same as Far Cry 3               */
-    { R"(\\FarCry4\.exe$)", {{
+    /* Far Cry 4 and Primal: Same as Far Cry 3    */
+    { R"(\\(FarCry4|FCPrimal)\.exe$)", {{
       { "dxgi.nvapiHack",                   "False" },
+      { "dxgi.customVendorId",              "1002" },
     }} },
     /* Frostpunk: Renders one frame with D3D9     *
      * after creating the DXGI swap chain         */
