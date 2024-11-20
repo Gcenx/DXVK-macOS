@@ -419,6 +419,12 @@ namespace dxvk {
     { R"(\\Fallout76\.exe$)", {{
       { "dxgi.syncInterval",                "1" },
     }} },
+    /* Bladestorm Nightmare                       *
+     * Game speed increases when above 60 fps in  *
+     * the tavern area                            */
+    { R"(\\BLADESTORM Nightmare\\Launch_(EA|JP)\.exe$)", {{
+      { "dxgi.maxFrameRate",                "60"  },
+    }} },
 
     /**********************************************/
     /* D3D9 GAMES                                 */
