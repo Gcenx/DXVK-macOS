@@ -55,9 +55,11 @@ namespace dxvk {
     /* Far Cry 3: Assumes clear(0.5) on an UNORM  *
      * format to result in 128 on AMD and 127 on  *
      * Nvidia. We assume that the Vulkan drivers  *
-     * match the clear behaviour of D3D11.        */
+     * match the clear behaviour of D3D11.        *
+     * Intel needs to match the AMD result        */
     { R"(\\(farcry3|fc3_blooddragon)_d3d11\.exe$)", {{
       { "dxgi.nvapiHack",                   "False" },
+      { "dxgi.customVendorId",              "1002" },
     }} },
     /* Far Cry 4: Same as Far Cry 3               */
     { R"(\\FarCry4\.exe$)", {{
