@@ -434,6 +434,12 @@ namespace dxvk {
     { R"(\\kenshi_x64\.exe$)", {{
       { "d3d11.cachedDynamicResources",     "v"    },
     }} },
+    /* Crysis 1/Warhead - Game bug in d3d10 makes *
+     * it select lowest supported refresh rate    */
+    { R"(\\Crysis(64)?\.exe$)", {{
+      { "d3d9.maxFrameRate",              "-1"      },
+      { "dxgi.maxFrameRate",              "-1"      },
+    }} },
 
     /**********************************************/
     /* D3D9 GAMES                                 */
