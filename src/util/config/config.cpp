@@ -429,6 +429,11 @@ namespace dxvk {
     { R"(\\GRW\.exe$)", {{
       { "d3d11.dcSingleUseMode",            "False" },
     }} },
+    /* Kenshi                                     *
+     * Helps CPU bound performance                */
+    { R"(\\kenshi_x64\.exe$)", {{
+      { "d3d11.cachedDynamicResources",     "v"    },
+    }} },
 
     /**********************************************/
     /* D3D9 GAMES                                 */
