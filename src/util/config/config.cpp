@@ -404,6 +404,21 @@ namespace dxvk {
     { R"(\\SnowRunner\.exe$)", {{
       { "d3d11.dcSingleUseMode",            "False" },
     }} },
+    /* Fallout 76
+     * Game tries to be too "smart" and changes sync
+     * interval based on performance (in fullscreen)
+     * or tries to match (or ratio below) 60fps
+     * (in windowed).
+     *
+     * Ends up getting in a loop where it will switch
+     * and start stuttering, or get stuck at targeting
+     * 30Hz in fullscreen.
+     * Windowed mode being locked to 60fps as well is
+     * pretty suboptimal...
+     */
+    { R"(\\Fallout76\.exe$)", {{
+      { "dxgi.syncInterval",                "1" },
+    }} },
 
     /**********************************************/
     /* D3D9 GAMES                                 */
