@@ -440,11 +440,6 @@ namespace dxvk {
       { "d3d9.maxFrameRate",              "-1"      },
       { "dxgi.maxFrameRate",              "-1"      },
     }} },
-    /* Kena: Bridge of Spirits: intel water       * 
-     * flickering issues                          */
-    { R"(\\Kena-Win64-Shipping\.exe$)", {{
-      { "dxgi.customVendorId",              "1002" },
-    }} },
 
     /**********************************************/
     /* D3D9 GAMES                                 */
