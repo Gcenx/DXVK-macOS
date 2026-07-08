@@ -370,6 +370,8 @@ namespace dxvk {
     //////////////////////////////////////////
     // Bit masks containing used samplers
     // and render targets for hazard tracking
+    std::vector<uint32_t> m_variantBoundConsts;
+
     uint32_t m_usedSamplers;
     uint32_t m_usedRTs;
 

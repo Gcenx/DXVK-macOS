@@ -124,6 +124,11 @@ namespace dxvk {
     /// Works around a game bug in Halo CE where it gives cube textures to 2d/volume samplers
     bool forceSamplerTypeSpecConstants;
 
+    /// De-aliased sampler bindings: one slot per texture-type variant.
+    /// Required on MoltenVK (Metal cannot express aliased bindings);
+    /// Auto enables it exactly there.
+    bool deAliasedSamplers;
+
     /// Forces an MSAA level on the swapchain
     int32_t forceSwapchainMSAA;
 
