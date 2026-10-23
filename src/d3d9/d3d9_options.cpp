@@ -83,6 +83,15 @@ namespace dxvk {
                             0, 0);
     applyTristate(this->generalHazards, config.getOption<Tristate>("d3d9.generalHazards", Tristate::Auto));
 
+    // Tile-based Apple GPUs cannot read a render target that is being
+    // rendered to, so sample a copy of it instead.
+    this->renderTargetHazardCopies = adapter != nullptr
+                                  && adapter->matchesDriver(
+                                    DxvkGpuVendor(0x106b),
+                                    VK_DRIVER_ID_MOLTENVK,
+                                    0, 0);
+    applyTristate(this->renderTargetHazardCopies, config.getOption<Tristate>("d3d9.renderTargetHazardCopies", Tristate::Auto));
+
     std::string floatEmulation = Config::toLower(config.getOption<std::string>("d3d9.floatEmulation", "auto"));
     if (floatEmulation == "strict") {
       d3d9FloatEmulation = D3D9FloatEmulation::Strict;

@@ -79,10 +79,7 @@
 
 // MinGW headers are broken. Who'dve guessed?
 #ifndef _MSC_VER
-typedef struct _D3DDEVINFO_RESOURCEMANAGER
-{
-  char dummy;
-} D3DDEVINFO_RESOURCEMANAGER, * LPD3DDEVINFO_RESOURCEMANAGER;
+// Recent MinGW headers define this struct themselves.
 
 #ifndef __WINE__
 extern "C" WINUSERAPI WINBOOL WINAPI SetProcessDPIAware(VOID);

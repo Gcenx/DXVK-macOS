@@ -1513,6 +1513,15 @@ namespace dxvk {
 
   void DxvkContext::emitRenderTargetReadbackBarrier() {
     if (m_flags.test(DxvkContextFlag::GpRenderPassBound)) {
+      // MoltenVK cannot implement a by-region barrier inside a render
+      // pass, and doing so can leave the GPU hung. End the render pass
+      // instead so that previous draws are stored before the next one.
+      if (m_device->adapter()->matchesDriver(DxvkGpuVendor(0x106b),
+            VK_DRIVER_ID_MOLTENVK, 0, 0)) {
+        this->spillRenderPass(true);
+        return;
+      }
+
       emitMemoryBarrier(VK_DEPENDENCY_BY_REGION_BIT,
         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
         VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,

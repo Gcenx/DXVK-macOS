@@ -53,6 +53,26 @@ namespace dxvk {
     return DxsoConstantBuffers::VSCount + caps::MaxTexturesVS + DxsoConstantBuffers::PSCount + caps::MaxTexturesPS + 1; // From last pixel shader slot, above.
   }
 
+  // Number of additional slots per sampler. A sampler can be declared as
+  // up to five image variables (2D, 2D shadow, cube, cube shadow, 3D).
+  // Vulkan allows them to alias one binding, but MoltenVK maps every
+  // variable of a binding to the same Metal index, which Metal rejects.
+  // Shaders therefore use a separate sampler descriptor in the regular
+  // slot, and one sampled image descriptor per variant in these slots,
+  // which also keeps the sampler count within Metal's limit of 16.
+  constexpr uint32_t SamplerAliasSlotCount = 5;
+
+  constexpr uint32_t computeSamplerAliasSlotId(
+        DxsoProgramType shaderStage,
+        uint32_t        samplerIndex,
+        uint32_t        aliasIndex) {
+    const uint32_t samplerId = shaderStage == DxsoProgramType::PixelShader
+      ? samplerIndex
+      : samplerIndex + caps::MaxTexturesPS + 1; // PS has one extra (DMAP) sampler, see getSWVPBufferSlot
+
+    return getSWVPBufferSlot() + 1 + samplerId * SamplerAliasSlotCount + aliasIndex;
+  }
+
   uint32_t RegisterLinkerSlot(DxsoSemantic semantic);
 
 }
