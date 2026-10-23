@@ -757,9 +757,26 @@ namespace dxvk {
 
     VkImageViewType viewType = VK_IMAGE_VIEW_TYPE_MAX_ENUM;
 
-    auto DclSampler = [this, &viewType](
+    const uint32_t binding = computeResourceSlotId(m_programInfo.type(),
+      DxsoBindingType::Image,
+      idx);
+
+    // One separate sampler shared by all image variants
+    const uint32_t samplerTypeId = m_module.defSamplerType();
+    const uint32_t samplerVarId  = m_module.newVar(
+      m_module.defPointerType(samplerTypeId, spv::StorageClassUniformConstant),
+      spv::StorageClassUniformConstant);
+
+    m_module.setDebugName(samplerVarId,
+      str::format("s", idx, "_sampler").c_str());
+    m_module.decorateDescriptorSet(samplerVarId, 0);
+    m_module.decorateBinding      (samplerVarId, binding);
+
+    uint32_t aliasIndex = 0;
+
+    auto DclSampler = [this, &viewType, &aliasIndex, samplerTypeId, samplerVarId](
       uint32_t        idx,
-      uint32_t        bindingId,
+      uint32_t        baseBindingId,
       DxsoSamplerType type,
       bool            depth,
       bool            implicit) {
@@ -804,19 +821,35 @@ namespace dxvk {
 
       sampler.varId = m_module.newVar(
         m_module.defPointerType(
-          sampler.typeId, spv::StorageClassUniformConstant),
+          sampler.imageTypeId, spv::StorageClassUniformConstant),
         spv::StorageClassUniformConstant);
+
+      sampler.samplerTypeId = samplerTypeId;
+      sampler.samplerVarId  = samplerVarId;
 
       std::string name = str::format("s", idx, suffix, depth ? "_shadow" : "");
       m_module.setDebugName(sampler.varId, name.c_str());
 
+      // Every image variant gets its own binding, since Metal
+      // cannot alias multiple resources at the same index.
+      const uint32_t bindingId = computeSamplerAliasSlotId(
+        m_programInfo.type(), idx, aliasIndex++);
+
+      sampler.boundConst = m_module.specConstBool(true);
+      m_module.decorateSpecId(sampler.boundConst, bindingId);
+      m_module.setDebugName(sampler.boundConst,
+        str::format(name, "_bound").c_str());
+
       m_module.decorateDescriptorSet(sampler.varId, 0);
       m_module.decorateBinding      (sampler.varId, bindingId);
-    };
 
-    const uint32_t binding = computeResourceSlotId(m_programInfo.type(),
-      DxsoBindingType::Image,
-      idx);
+      DxvkResourceSlot resource;
+      resource.slot   = bindingId;
+      resource.type   = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+      resource.view   = viewType;
+      resource.access = VK_ACCESS_SHADER_READ_BIT;
+      m_resourceSlots.push_back(resource);
+    };
 
     const bool implicit = m_programInfo.majorVersion() < 2 || m_moduleInfo.options.forceSamplerTypeSpecConstants;
 
@@ -845,18 +878,14 @@ namespace dxvk {
     }
 
     DxsoSampler& sampler = m_samplers[idx];
-    sampler.boundConst = m_module.specConstBool(true);
     sampler.type = type;
-    m_module.decorateSpecId(sampler.boundConst, binding);
-    m_module.setDebugName(sampler.boundConst,
-      str::format("s", idx, "_bound").c_str());
 
     // Store descriptor info for the shader interface
     DxvkResourceSlot resource;
     resource.slot   = binding;
-    resource.type   = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    resource.view   = implicit ? VK_IMAGE_VIEW_TYPE_MAX_ENUM : viewType;
-    resource.access = VK_ACCESS_SHADER_READ_BIT;
+    resource.type   = VK_DESCRIPTOR_TYPE_SAMPLER;
+    resource.view   = VK_IMAGE_VIEW_TYPE_MAX_ENUM;
+    resource.access = 0;
     m_resourceSlots.push_back(resource);
   }
 
@@ -3070,7 +3099,7 @@ void DxsoCompiler::emitControlFlowGenericLoop(
         m_module.opBranchConditional(isDepth, depthLabel, colorLabel);
 
         m_module.opLabel(colorLabel);
-        SampleImage(texcoordVar, sampler.color[samplerType], false, samplerType, sampler.boundConst);
+        SampleImage(texcoordVar, sampler.color[samplerType], false, samplerType, sampler.color[samplerType].boundConst);
         m_module.opBranch(endLabel);
 
         m_module.opLabel(depthLabel);
@@ -3081,7 +3110,7 @@ void DxsoCompiler::emitControlFlowGenericLoop(
         m_module.opLabel(endLabel);
       }
       else
-        SampleImage(texcoordVar, sampler.color[samplerType], false, samplerType, sampler.boundConst);
+        SampleImage(texcoordVar, sampler.color[samplerType], false, samplerType, sampler.color[samplerType].boundConst);
     };
 
     if (m_programInfo.majorVersion() >= 2 && !m_moduleInfo.options.forceSamplerTypeSpecConstants) {
@@ -3277,7 +3306,9 @@ void DxsoCompiler::emitControlFlowGenericLoop(
        (operands.flags & spv::ImageOperandsLodMask)
     || (operands.flags & spv::ImageOperandsGradMask);
 
-    const uint32_t sampledImage = m_module.opLoad(samplerInfo.typeId, samplerInfo.varId);
+    const uint32_t sampledImage = m_module.opSampledImage(samplerInfo.typeId,
+      m_module.opLoad(samplerInfo.imageTypeId,   samplerInfo.varId),
+      m_module.opLoad(samplerInfo.samplerTypeId, samplerInfo.samplerVarId));
 
     uint32_t val;
 

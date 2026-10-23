@@ -6035,10 +6035,17 @@ namespace dxvk {
     D3D9CommonTexture* commonTex =
       GetCommonTexture(m_state.textures[StateSampler]);
 
+    const uint32_t aliasSlot = computeSamplerAliasSlotId(
+      shaderSampler.first, uint32_t(shaderSampler.second), 0);
+
     EmitCs([
-      cSlot = slot,
+      cSlot      = slot,
+      cAliasSlot = aliasSlot,
       cImageView = commonTex->GetSampleView(srgb)
     ](DxvkContext* ctx) {
+      for (uint32_t i = 0; i < SamplerAliasSlotCount; i++)
+        ctx->bindResourceView(cAliasSlot + i, cImageView, nullptr);
+
       ctx->bindResourceView(cSlot, cImageView, nullptr);
     });
   }
@@ -6055,6 +6062,12 @@ namespace dxvk {
           DxsoBindingType::Image, uint32_t(shaderSampler.second));
 
         ctx->bindResourceView(slot, nullptr, nullptr);
+
+        uint32_t aliasSlot = computeSamplerAliasSlotId(shaderSampler.first,
+          uint32_t(shaderSampler.second), 0);
+
+        for (uint32_t j = 0; j < SamplerAliasSlotCount; j++)
+          ctx->bindResourceView(aliasSlot + j, nullptr, nullptr);
       }
     });
   }
@@ -7296,6 +7309,10 @@ namespace dxvk {
         auto samplerInfo = RemapStateSamplerShader(DWORD(i));
         uint32_t slot = computeResourceSlotId(samplerInfo.first, DxsoBindingType::Image, uint32_t(samplerInfo.second));
         ctx->bindResourceView(slot, nullptr, nullptr);
+
+        uint32_t aliasSlot = computeSamplerAliasSlotId(samplerInfo.first, uint32_t(samplerInfo.second), 0);
+        for (uint32_t j = 0; j < SamplerAliasSlotCount; j++)
+          ctx->bindResourceView(aliasSlot + j, nullptr, nullptr);
       }
     });
 
