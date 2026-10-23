@@ -759,6 +759,12 @@ namespace dxvk {
 
     void MarkRenderHazards();
 
+    void ResolveRenderTargetHazards();
+
+    Rc<DxvkImageView> GetHazardCopy(
+            DxvkContext*        ctx,
+      const Rc<DxvkImageView>&  srcView);
+
     void UploadManagedTexture(D3D9CommonTexture* pResource);
 
     void UploadManagedTextures(uint32_t mask);
@@ -1211,6 +1217,18 @@ namespace dxvk {
 
     uint32_t                        m_activeRTs              = 0;
     uint32_t                        m_activeRTTextures       = 0;
+
+    // Samplers that currently have a copy of a bound render
+    // target bound instead of the render target itself
+    uint32_t                        m_hazardCopyMask         = 0;
+
+    struct D3D9HazardCopy {
+      Rc<DxvkImageView> src;
+      Rc<DxvkImageView> copy;
+    };
+
+    // Only accessed on the CS thread
+    std::unordered_map<DxvkImageView*, D3D9HazardCopy> m_hazardCopies;
     uint32_t                        m_activeDSTextures       = 0;
     uint32_t                        m_activeHazardsRT        = 0;
     uint32_t                        m_activeHazardsDS        = 0;
