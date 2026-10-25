@@ -718,6 +718,7 @@ namespace dxvk {
           IDirect3DSurface9* pDestinationSurface,
     const POINT*             pDestPoint) {
     D3D9DeviceLock lock = LockDevice();
+    InvalidateHazardCopies();
 
     D3D9Surface* src = static_cast<D3D9Surface*>(pSourceSurface);
     D3D9Surface* dst = static_cast<D3D9Surface*>(pDestinationSurface);
@@ -788,6 +789,7 @@ namespace dxvk {
           IDirect3DBaseTexture9* pSourceTexture,
           IDirect3DBaseTexture9* pDestinationTexture) {
     D3D9DeviceLock lock = LockDevice();
+    InvalidateHazardCopies();
 
     if (!pDestinationTexture || !pSourceTexture)
       return D3DERR_INVALIDCALL;
@@ -937,6 +939,7 @@ namespace dxvk {
     const RECT*                pDestRect,
           D3DTEXTUREFILTERTYPE Filter) {
     D3D9DeviceLock lock = LockDevice();
+    InvalidateHazardCopies();
 
     D3D9Surface* dst = static_cast<D3D9Surface*>(pDestSurface);
     D3D9Surface* src = static_cast<D3D9Surface*>(pSourceSurface);
@@ -1146,6 +1149,7 @@ namespace dxvk {
     const RECT*              pRect,
           D3DCOLOR           Color) {
     D3D9DeviceLock lock = LockDevice();
+    InvalidateHazardCopies();
 
     D3D9Surface* dst = static_cast<D3D9Surface*>(pSurface);
 
@@ -1238,6 +1242,7 @@ namespace dxvk {
           DWORD              RenderTargetIndex,
           IDirect3DSurface9* pRenderTarget) {
     D3D9DeviceLock lock = LockDevice();
+    InvalidateHazardCopies();
 
     if (unlikely(RenderTargetIndex >= caps::MaxSimultaneousRenderTargets
      || (pRenderTarget == nullptr && RenderTargetIndex == 0)))
@@ -1430,6 +1435,7 @@ namespace dxvk {
       return D3D_OK;
 
     D3D9DeviceLock lock = LockDevice();
+    InvalidateHazardCopies();
 
     const auto& vp = m_state.viewport;
     const auto& sc = m_state.scissorRect;
@@ -4442,6 +4448,7 @@ namespace dxvk {
   HRESULT D3D9DeviceEx::FlushImage(
         D3D9CommonTexture*      pResource,
         UINT                    Subresource) {
+    InvalidateHazardCopies();
 
     const Rc<DxvkImage> image = pResource->GetImage();
     auto formatInfo  = imageFormatInfo(image->info().format);
@@ -5431,12 +5438,16 @@ namespace dxvk {
         const uint32_t aliasSlot = computeSamplerAliasSlotId(
           shaderSampler.first, uint32_t(shaderSampler.second), 0);
 
+        const uint64_t epoch = m_d3d9Options.sharedRenderTargetHazardCopies
+          ? m_hazardCopyEpoch : 0;
+
         EmitCs([this,
           cSlot      = slot,
           cAliasSlot = aliasSlot,
-          cImageView = commonTex->GetSampleView(srgb)
+          cImageView = commonTex->GetSampleView(srgb),
+          cEpoch     = epoch
         ] (DxvkContext* ctx) {
-          Rc<DxvkImageView> copy = GetHazardCopy(ctx, cImageView);
+          Rc<DxvkImageView> copy = GetHazardCopy(ctx, cImageView, cEpoch);
 
           if (copy == nullptr)
             return;
@@ -5455,7 +5466,8 @@ namespace dxvk {
 
   Rc<DxvkImageView> D3D9DeviceEx::GetHazardCopy(
           DxvkContext*        ctx,
-    const Rc<DxvkImageView>&  srcView) {
+    const Rc<DxvkImageView>&  srcView,
+          uint64_t            epoch) {
     if (srcView == nullptr)
       return nullptr;
 
@@ -5496,6 +5508,12 @@ namespace dxvk {
 
     if (entry->second.copy == nullptr)
       return nullptr;
+
+    // A zero epoch means that the copy must be refreshed for every draw
+    if (epoch != 0 && entry->second.epoch == epoch)
+      return entry->second.copy;
+
+    entry->second.epoch = epoch;
 
     const DxvkImageViewCreateInfo& viewInfo = srcView->info();
 
@@ -6243,9 +6261,12 @@ namespace dxvk {
 
 
   void D3D9DeviceEx::PrepareDraw(D3DPRIMITIVETYPE PrimitiveType) {
-    // With hazard copies, the shader never reads the render target itself,
-    // and a barrier inside the render pass is not supported on MoltenVK.
-    if (unlikely(m_activeHazardsRT != 0) && !m_d3d9Options.renderTargetHazardCopies) {
+    // With hazard copies, the shader never reads the render target itself.
+    // Any draw that writes render targets without sampling them makes
+    // shared copies stale.
+    if (likely(m_activeHazardsRT == 0))
+      InvalidateHazardCopies();
+    else if (!UseRenderTargetHazardCopies()) {
       EmitCs([](DxvkContext* ctx) {
         ctx->emitRenderTargetReadbackBarrier();
       });
@@ -6300,7 +6321,7 @@ namespace dxvk {
     if (usedDirtyTextures)
       UndirtyTextures(usedDirtyTextures);
 
-    if (unlikely(m_activeHazardsRT != 0) && m_d3d9Options.renderTargetHazardCopies)
+    if (unlikely(m_activeHazardsRT != 0) && UseRenderTargetHazardCopies())
       ResolveRenderTargetHazards();
 
     if (m_flags.test(D3D9DeviceFlag::DirtyBlendState))

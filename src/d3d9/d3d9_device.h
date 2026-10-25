@@ -763,7 +763,17 @@ namespace dxvk {
 
     Rc<DxvkImageView> GetHazardCopy(
             DxvkContext*        ctx,
-      const Rc<DxvkImageView>&  srcView);
+      const Rc<DxvkImageView>&  srcView,
+            uint64_t            epoch);
+
+    void InvalidateHazardCopies() {
+      m_hazardCopyEpoch++;
+    }
+
+    bool UseRenderTargetHazardCopies() const {
+      return m_d3d9Options.renderTargetHazardCopies
+          || m_d3d9Options.sharedRenderTargetHazardCopies;
+    }
 
     void UploadManagedTexture(D3D9CommonTexture* pResource);
 
@@ -1225,7 +1235,13 @@ namespace dxvk {
     struct D3D9HazardCopy {
       Rc<DxvkImageView> src;
       Rc<DxvkImageView> copy;
+      uint64_t          epoch = 0;
     };
+
+    // Incremented whenever a render target may have been written by
+    // anything other than a draw that samples a copy of it. Shared
+    // hazard copies are only refreshed when this changes.
+    uint64_t                        m_hazardCopyEpoch        = 1;
 
     // Only accessed on the CS thread
     std::unordered_map<DxvkImageView*, D3D9HazardCopy> m_hazardCopies;
