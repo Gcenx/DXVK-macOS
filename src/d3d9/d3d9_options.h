@@ -74,6 +74,16 @@ namespace dxvk {
     /// for rendering hazards
     bool generalHazards;
 
+    /// Whether to sample a copy of render targets
+    /// that are bound for rendering at the same time.
+    /// Required on tile-based GPUs (MoltenVK).
+    bool renderTargetHazardCopies;
+
+    /// Whether consecutive draws that sample a bound render
+    /// target share one copy instead of copying for each draw.
+    /// Used on MoltenVK when hazard copies are disabled.
+    bool sharedRenderTargetHazardCopies;
+
     /// Anisotropic filter override
     ///
     /// Enforces anisotropic filtering with the

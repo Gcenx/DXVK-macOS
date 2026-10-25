@@ -718,6 +718,7 @@ namespace dxvk {
           IDirect3DSurface9* pDestinationSurface,
     const POINT*             pDestPoint) {
     D3D9DeviceLock lock = LockDevice();
+    InvalidateHazardCopies();
 
     D3D9Surface* src = static_cast<D3D9Surface*>(pSourceSurface);
     D3D9Surface* dst = static_cast<D3D9Surface*>(pDestinationSurface);
@@ -788,6 +789,7 @@ namespace dxvk {
           IDirect3DBaseTexture9* pSourceTexture,
           IDirect3DBaseTexture9* pDestinationTexture) {
     D3D9DeviceLock lock = LockDevice();
+    InvalidateHazardCopies();
 
     if (!pDestinationTexture || !pSourceTexture)
       return D3DERR_INVALIDCALL;
@@ -937,6 +939,7 @@ namespace dxvk {
     const RECT*                pDestRect,
           D3DTEXTUREFILTERTYPE Filter) {
     D3D9DeviceLock lock = LockDevice();
+    InvalidateHazardCopies();
 
     D3D9Surface* dst = static_cast<D3D9Surface*>(pDestSurface);
     D3D9Surface* src = static_cast<D3D9Surface*>(pSourceSurface);
@@ -1146,6 +1149,7 @@ namespace dxvk {
     const RECT*              pRect,
           D3DCOLOR           Color) {
     D3D9DeviceLock lock = LockDevice();
+    InvalidateHazardCopies();
 
     D3D9Surface* dst = static_cast<D3D9Surface*>(pSurface);
 
@@ -1238,6 +1242,7 @@ namespace dxvk {
           DWORD              RenderTargetIndex,
           IDirect3DSurface9* pRenderTarget) {
     D3D9DeviceLock lock = LockDevice();
+    InvalidateHazardCopies();
 
     if (unlikely(RenderTargetIndex >= caps::MaxSimultaneousRenderTargets
      || (pRenderTarget == nullptr && RenderTargetIndex == 0)))
@@ -1430,6 +1435,7 @@ namespace dxvk {
       return D3D_OK;
 
     D3D9DeviceLock lock = LockDevice();
+    InvalidateHazardCopies();
 
     const auto& vp = m_state.viewport;
     const auto& sc = m_state.scissorRect;
@@ -4442,6 +4448,7 @@ namespace dxvk {
   HRESULT D3D9DeviceEx::FlushImage(
         D3D9CommonTexture*      pResource,
         UINT                    Subresource) {
+    InvalidateHazardCopies();
 
     const Rc<DxvkImage> image = pResource->GetImage();
     auto formatInfo  = imageFormatInfo(image->info().format);
@@ -5394,6 +5401,137 @@ namespace dxvk {
   }
 
 
+  void D3D9DeviceEx::ResolveRenderTargetHazards() {
+    // Tile-based GPUs cannot sample a render target that the same draw
+    // writes to, since neighbouring pixels may still live in tile memory
+    // of other tiles. Sample a copy of the render target instead.
+    const uint32_t samplerMask = m_psShaderMasks.samplerMask & m_activeRTTextures;
+
+    for (uint32_t rtIdx : bit::BitMask(m_activeHazardsRT)) {
+      D3D9Surface* rtSurf = m_state.renderTargets[rtIdx].ptr();
+
+      if (unlikely(rtSurf == nullptr))
+        continue;
+
+      IDirect3DBaseTexture9* rtBase = rtSurf->GetBaseTexture();
+
+      if (unlikely(rtBase == nullptr))
+        continue;
+
+      for (uint32_t samplerIdx : bit::BitMask(samplerMask & ~m_hazardCopyMask)) {
+        if (m_state.textures[samplerIdx] != rtBase)
+          continue;
+
+        D3D9CommonTexture* commonTex = GetCommonTexture(m_state.textures[samplerIdx]);
+
+        if (unlikely(commonTex == nullptr))
+          continue;
+
+        const bool srgb =
+          m_state.samplerStates[samplerIdx][D3DSAMP_SRGBTEXTURE] & 0x1;
+
+        auto shaderSampler = RemapStateSamplerShader(samplerIdx);
+
+        const uint32_t slot = computeResourceSlotId(shaderSampler.first,
+          DxsoBindingType::Image, uint32_t(shaderSampler.second));
+
+        const uint32_t aliasSlot = computeSamplerAliasSlotId(
+          shaderSampler.first, uint32_t(shaderSampler.second), 0);
+
+        const uint64_t epoch = m_d3d9Options.sharedRenderTargetHazardCopies
+          ? m_hazardCopyEpoch : 0;
+
+        EmitCs([this,
+          cSlot      = slot,
+          cAliasSlot = aliasSlot,
+          cImageView = commonTex->GetSampleView(srgb),
+          cEpoch     = epoch
+        ] (DxvkContext* ctx) {
+          Rc<DxvkImageView> copy = GetHazardCopy(ctx, cImageView, cEpoch);
+
+          if (copy == nullptr)
+            return;
+
+          for (uint32_t i = 0; i < SamplerAliasSlotCount; i++)
+            ctx->bindResourceView(cAliasSlot + i, copy, nullptr);
+
+          ctx->bindResourceView(cSlot, copy, nullptr);
+        });
+
+        m_hazardCopyMask |= 1u << samplerIdx;
+      }
+    }
+  }
+
+
+  Rc<DxvkImageView> D3D9DeviceEx::GetHazardCopy(
+          DxvkContext*        ctx,
+    const Rc<DxvkImageView>&  srcView,
+          uint64_t            epoch) {
+    if (srcView == nullptr)
+      return nullptr;
+
+    auto entry = m_hazardCopies.find(srcView.ptr());
+
+    if (entry == m_hazardCopies.end()) {
+      // Don't keep stale render targets alive forever
+      if (m_hazardCopies.size() >= 64)
+        m_hazardCopies.clear();
+
+      DxvkImageCreateInfo imageInfo = srcView->image()->info();
+      imageInfo.usage         = VK_IMAGE_USAGE_SAMPLED_BIT
+                              | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+      imageInfo.stages        = VK_PIPELINE_STAGE_TRANSFER_BIT
+                              | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT
+                              | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+      imageInfo.access        = VK_ACCESS_TRANSFER_WRITE_BIT
+                              | VK_ACCESS_SHADER_READ_BIT;
+      imageInfo.tiling        = VK_IMAGE_TILING_OPTIMAL;
+      imageInfo.layout        = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+      imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+      imageInfo.shared        = VK_FALSE;
+      imageInfo.sharing       = DxvkSharedHandleInfo();
+
+      D3D9HazardCopy copy;
+      copy.src = srcView;
+
+      try {
+        Rc<DxvkImage> image = m_dxvkDevice->createImage(
+          imageInfo, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        copy.copy = m_dxvkDevice->createImageView(image, srcView->info());
+      } catch (const DxvkError& e) {
+        Logger::err(str::format("D3D9: Failed to create render target copy: ", e.message()));
+      }
+
+      entry = m_hazardCopies.emplace(srcView.ptr(), std::move(copy)).first;
+    }
+
+    if (entry->second.copy == nullptr)
+      return nullptr;
+
+    // A zero epoch means that the copy must be refreshed for every draw
+    if (epoch != 0 && entry->second.epoch == epoch)
+      return entry->second.copy;
+
+    entry->second.epoch = epoch;
+
+    const DxvkImageViewCreateInfo& viewInfo = srcView->info();
+
+    for (uint32_t i = 0; i < viewInfo.numLevels; i++) {
+      VkImageSubresourceLayers layers = {
+        viewInfo.aspect, viewInfo.minLevel + i,
+        viewInfo.minLayer, viewInfo.numLayers };
+
+      ctx->copyImage(
+        entry->second.copy->image(), layers, VkOffset3D { 0, 0, 0 },
+        srcView->image(), layers, VkOffset3D { 0, 0, 0 },
+        srcView->image()->mipLevelExtent(viewInfo.minLevel + i));
+    }
+
+    return entry->second.copy;
+  }
+
+
   void D3D9DeviceEx::UploadManagedTexture(D3D9CommonTexture* pResource) {
     for (uint32_t subresource = 0; subresource < pResource->CountSubresources(); subresource++) {
       if (!pResource->NeedsUpload(subresource) || pResource->GetBuffer(subresource) == nullptr)
@@ -6035,10 +6173,17 @@ namespace dxvk {
     D3D9CommonTexture* commonTex =
       GetCommonTexture(m_state.textures[StateSampler]);
 
+    const uint32_t aliasSlot = computeSamplerAliasSlotId(
+      shaderSampler.first, uint32_t(shaderSampler.second), 0);
+
     EmitCs([
-      cSlot = slot,
+      cSlot      = slot,
+      cAliasSlot = aliasSlot,
       cImageView = commonTex->GetSampleView(srgb)
     ](DxvkContext* ctx) {
+      for (uint32_t i = 0; i < SamplerAliasSlotCount; i++)
+        ctx->bindResourceView(cAliasSlot + i, cImageView, nullptr);
+
       ctx->bindResourceView(cSlot, cImageView, nullptr);
     });
   }
@@ -6055,6 +6200,12 @@ namespace dxvk {
           DxsoBindingType::Image, uint32_t(shaderSampler.second));
 
         ctx->bindResourceView(slot, nullptr, nullptr);
+
+        uint32_t aliasSlot = computeSamplerAliasSlotId(shaderSampler.first,
+          uint32_t(shaderSampler.second), 0);
+
+        for (uint32_t j = 0; j < SamplerAliasSlotCount; j++)
+          ctx->bindResourceView(aliasSlot + j, nullptr, nullptr);
       }
     });
   }
@@ -6110,7 +6261,12 @@ namespace dxvk {
 
 
   void D3D9DeviceEx::PrepareDraw(D3DPRIMITIVETYPE PrimitiveType) {
-    if (unlikely(m_activeHazardsRT != 0)) {
+    // With hazard copies, the shader never reads the render target itself.
+    // Any draw that writes render targets without sampling them makes
+    // shared copies stale.
+    if (likely(m_activeHazardsRT == 0))
+      InvalidateHazardCopies();
+    else if (!UseRenderTargetHazardCopies()) {
       EmitCs([](DxvkContext* ctx) {
         ctx->emitRenderTargetReadbackBarrier();
       });
@@ -6157,9 +6313,16 @@ namespace dxvk {
     if (activeDirtySamplers)
       UndirtySamplers(activeDirtySamplers);
 
+    // Rebind the real textures in place of last draw's hazard copies
+    m_dirtyTextures |= m_hazardCopyMask;
+    m_hazardCopyMask = 0;
+
     const uint32_t usedDirtyTextures = m_dirtyTextures & usedSamplerMask;
     if (usedDirtyTextures)
       UndirtyTextures(usedDirtyTextures);
+
+    if (unlikely(m_activeHazardsRT != 0) && UseRenderTargetHazardCopies())
+      ResolveRenderTargetHazards();
 
     if (m_flags.test(D3D9DeviceFlag::DirtyBlendState))
       BindBlendState();
@@ -7296,6 +7459,10 @@ namespace dxvk {
         auto samplerInfo = RemapStateSamplerShader(DWORD(i));
         uint32_t slot = computeResourceSlotId(samplerInfo.first, DxsoBindingType::Image, uint32_t(samplerInfo.second));
         ctx->bindResourceView(slot, nullptr, nullptr);
+
+        uint32_t aliasSlot = computeSamplerAliasSlotId(samplerInfo.first, uint32_t(samplerInfo.second), 0);
+        for (uint32_t j = 0; j < SamplerAliasSlotCount; j++)
+          ctx->bindResourceView(aliasSlot + j, nullptr, nullptr);
       }
     });
 

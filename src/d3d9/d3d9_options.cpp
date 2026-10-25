@@ -83,6 +83,21 @@ namespace dxvk {
                             0, 0);
     applyTristate(this->generalHazards, config.getOption<Tristate>("d3d9.generalHazards", Tristate::Auto));
 
+    // Tile-based Apple GPUs cannot read a render target that is being
+    // rendered to, so sample a copy of it instead.
+    const bool isMoltenVK = adapter != nullptr
+                         && adapter->matchesDriver(
+                           DxvkGpuVendor(0x106b),
+                           VK_DRIVER_ID_MOLTENVK,
+                           0, 0);
+
+    this->renderTargetHazardCopies = isMoltenVK;
+    applyTristate(this->renderTargetHazardCopies, config.getOption<Tristate>("d3d9.renderTargetHazardCopies", Tristate::Auto));
+
+    // Reading the render target itself is not an option on MoltenVK, so
+    // disabling copies only makes consecutive draws share the same copy.
+    this->sharedRenderTargetHazardCopies = isMoltenVK && !this->renderTargetHazardCopies;
+
     std::string floatEmulation = Config::toLower(config.getOption<std::string>("d3d9.floatEmulation", "auto"));
     if (floatEmulation == "strict") {
       d3d9FloatEmulation = D3D9FloatEmulation::Strict;

@@ -8,8 +8,8 @@ namespace dxvk {
     constexpr uint32_t MaxSets = 2048;
 
     std::array<VkDescriptorPoolSize, 9> pools = {{
-      { VK_DESCRIPTOR_TYPE_SAMPLER,                MaxSets * 2 },
-      { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,          MaxSets * 3 },
+      { VK_DESCRIPTOR_TYPE_SAMPLER,                MaxSets * 4 },
+      { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,          MaxSets * 8 },
       { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          MaxSets / 8 },
       { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         MaxSets * 3 },
       { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,         MaxSets / 8 },
